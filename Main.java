@@ -16,10 +16,14 @@ public class Main {
         board.printBoard();
 
         while (true) {
-            // Check if the current side has any pseudo-legal moves left
-            List<String> legalMoves = MoveGenerator.generatePseudoLegalMoves(board);
-            if (legalMoves.isEmpty()) {
-                System.out.println("Game Over! No legal moves available.");
+            // Check for checkmate or stalemate
+            if (MoveGenerator.isInCheckmate(board)) {
+                String winner = board.whiteToMove ? "Black" : "White";
+                System.out.println("⚔️  CHECKMATE! " + winner + " wins!");
+                break;
+            }
+            if (MoveGenerator.isInStalemate(board)) {
+                System.out.println("🤝 STALEMATE! The game is a draw.");
                 break;
             }
 

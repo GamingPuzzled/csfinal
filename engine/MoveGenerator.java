@@ -217,6 +217,36 @@ public class MoveGenerator {
         return "" + (char)('a' + (sq % 8)) + (char)('1' + (sq / 8));
     }
 
+    /**
+     * Checks if the specified side is currently in check.
+     */
+    public static boolean isInCheck(Board board, boolean whiteSide) {
+        long kingBitboard = whiteSide ? board.pieceBitboards[Board.WK] : board.pieceBitboards[Board.BK];
+        if (kingBitboard == 0L) return false;
+        int kingSquare = Long.numberOfTrailingZeros(kingBitboard);
+        return isSquareAttacked(board, kingSquare, !whiteSide);
+    }
+
+    /**
+     * Checks if the current side (whiteToMove) is in checkmate.
+     * Checkmate = in check AND no legal moves available
+     */
+    public static boolean isInCheckmate(Board board) {
+        List<String> legalMoves = generatePseudoLegalMoves(board);
+        if (!legalMoves.isEmpty()) return false;  // Has legal moves
+        return isInCheck(board, board.whiteToMove);  // In check with no moves = checkmate
+    }
+
+    /**
+     * Checks if the current side (whiteToMove) is in stalemate.
+     * Stalemate = NOT in check AND no legal moves available
+     */
+    public static boolean isInStalemate(Board board) {
+        List<String> legalMoves = generatePseudoLegalMoves(board);
+        if (!legalMoves.isEmpty()) return false;  // Has legal moves
+        return !isInCheck(board, board.whiteToMove);  // Not in check with no moves = stalemate
+    }
+
     private static void initializeLeaperAttacks() {
         for (int i = 0; i < 64; i++) {
             long bit = 1L << i;
