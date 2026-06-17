@@ -121,7 +121,6 @@ public class Evaluator {
         egScore += evaluatePieceType(board.pieceBitboards[Board.WQ], QUEEN_VALUE, QUEEN_PST, true);
 
         // Black Pieces (Subtract from score)
-        String s = "";
         mgScore -= evaluatePieceType(board.pieceBitboards[Board.BP], PAWN_VALUE, PAWN_PST, false);
         mgScore -= evaluatePieceType(board.pieceBitboards[Board.BN], KNIGHT_VALUE, KNIGHT_PST, false);
         mgScore -= evaluatePieceType(board.pieceBitboards[Board.BB], BISHOP_VALUE, BISHOP_PST, false);
@@ -252,5 +251,32 @@ public class Evaluator {
 
     private static int flipVertical(int sq) {
         return sq ^ 56;
+    }
+
+    /**
+     * Gets the value of the piece at a given square.
+     * Used for MVV-LVA move ordering.
+     * Returns 0 if no piece is on the square.
+     */
+    public static int getPieceValue(int square, Board board) {
+        long squareMask = 1L << square;
+        
+        // Check white pieces
+        if ((board.pieceBitboards[Board.WP] & squareMask) != 0) return PAWN_VALUE;
+        if ((board.pieceBitboards[Board.WN] & squareMask) != 0) return KNIGHT_VALUE;
+        if ((board.pieceBitboards[Board.WB] & squareMask) != 0) return BISHOP_VALUE;
+        if ((board.pieceBitboards[Board.WR] & squareMask) != 0) return ROOK_VALUE;
+        if ((board.pieceBitboards[Board.WQ] & squareMask) != 0) return QUEEN_VALUE;
+        if ((board.pieceBitboards[Board.WK] & squareMask) != 0) return KING_VALUE;
+        
+        // Check black pieces
+        if ((board.pieceBitboards[Board.BP] & squareMask) != 0) return PAWN_VALUE;
+        if ((board.pieceBitboards[Board.BN] & squareMask) != 0) return KNIGHT_VALUE;
+        if ((board.pieceBitboards[Board.BB] & squareMask) != 0) return BISHOP_VALUE;
+        if ((board.pieceBitboards[Board.BR] & squareMask) != 0) return ROOK_VALUE;
+        if ((board.pieceBitboards[Board.BQ] & squareMask) != 0) return QUEEN_VALUE;
+        if ((board.pieceBitboards[Board.BK] & squareMask) != 0) return KING_VALUE;
+        
+        return 0;  // No piece on this square
     }
 }

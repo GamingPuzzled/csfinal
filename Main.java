@@ -41,7 +41,7 @@ public class Main {
             else if (input.equalsIgnoreCase("ai")) {
                 System.out.println("AI is thinking...");
                 // Search depth 4 (calculates 4 plies ahead)
-                String aiMove = Searcher.findBestMove(board, 4);
+                String aiMove = Searcher.findBestMove(board, 6);
                 
                 if (aiMove != null) {
                     System.out.println("AI plays: " + aiMove);

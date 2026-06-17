@@ -66,14 +66,17 @@ public class Searcher {
             if (entry.flags == TranspositionTable.BETA && entry.score >= beta) return entry.score;
         }
 
-        // Base case
-        if (depth == 0) return Evaluator.evaluate(board);
+        // Base case: use quiescence search at leaf nodes
+        if (depth == 0) return quiescenceSearch(board, alpha, beta);
 
         List<String> legalMoves = MoveGenerator.generatePseudoLegalMoves(board);
         
         if (legalMoves.isEmpty()) {
             return Evaluator.evaluate(board); 
         }
+
+        // Sort moves using MVV-LVA for better move ordering
+        sortMovesByMVVLVA(legalMoves, board);
 
         int originalAlpha = alpha;
         String bestMoveFound = null;
@@ -124,6 +127,112 @@ public class Searcher {
             tt.store(board.currentHash, minEval, depth, flag, bestMoveFound);
             return minEval;
         }
+    }
+
+    /**
+     * Quiescence Search - extends search at leaf nodes with only forcing moves (captures).
+     * Solves the horizon effect by ensuring positions aren't evaluated mid-tactic.
+     */
+    private static int quiescenceSearch(Board board, int alpha, int beta) {
+        // Standing pat: eval current position without making any moves
+        int standingPat = Evaluator.evaluate(board);
+        
+        if (board.whiteToMove) {
+            // For white (maximizing), if standing pat is already >= beta, we can cutoff
+            if (standingPat >= beta) return standingPat;
+            // Update alpha with the best we can do so far (standing pat)
+            if (standingPat > alpha) alpha = standingPat;
+        } else {
+            // For black (minimizing), if standing pat is already <= alpha, we can cutoff
+            if (standingPat <= alpha) return standingPat;
+            // Update beta with the best we can do so far (standing pat)
+            if (standingPat < beta) beta = standingPat;
+        }
+        
+        // Generate only capturing moves for deeper search
+        List<String> captures = generateCaptures(board);
+        
+        if (board.whiteToMove) {
+            int maxEval = standingPat;
+            for (String move : captures) {
+                Board nextBoard = cloneBoard(board);
+                if (!nextBoard.makeMove(move)) continue;
+                
+                int eval = quiescenceSearch(nextBoard, alpha, beta);
+                maxEval = Math.max(maxEval, eval);
+                alpha = Math.max(alpha, eval);
+                
+                if (beta <= alpha) return maxEval;  // Beta cutoff
+            }
+            return maxEval;
+        } else {
+            int minEval = standingPat;
+            for (String move : captures) {
+                Board nextBoard = cloneBoard(board);
+                if (!nextBoard.makeMove(move)) continue;
+                
+                int eval = quiescenceSearch(nextBoard, alpha, beta);
+                minEval = Math.min(minEval, eval);
+                beta = Math.min(beta, eval);
+                
+                if (beta <= alpha) return minEval;  // Alpha cutoff
+            }
+            return minEval;
+        }
+    }
+
+    /**
+     * Generates only capturing moves from the current position.
+     */
+    private static List<String> generateCaptures(Board board) {
+        List<String> allMoves = MoveGenerator.generatePseudoLegalMoves(board);
+        List<String> captures = new java.util.ArrayList<>();
+        
+        long opponentPieces = board.whiteToMove ? board.blackPieces : board.whitePieces;
+        
+        for (String move : allMoves) {
+            // Extract destination square
+            int toSq = (move.charAt(2) - 'a') + (move.charAt(3) - '1') * 8;
+            
+            // Check if destination square has an opponent piece
+            if (((1L << toSq) & opponentPieces) != 0) {
+                captures.add(move);
+            }
+        }
+        
+        return captures;
+    }
+
+    /**
+     * Sorts moves using MVV-LVA (Most Valuable Victim, Least Valuable Attacker) heuristic.
+     * Prioritizes captures of valuable pieces by less valuable attacking pieces.
+     */
+    private static void sortMovesByMVVLVA(List<String> moves, Board board) {
+        moves.sort((move1, move2) -> {
+            int score1 = calculateMVVLVAScore(move1, board);
+            int score2 = calculateMVVLVAScore(move2, board);
+            return Integer.compare(score2, score1);  // Descending order (higher scores first)
+        });
+    }
+
+    /**
+     * Calculates MVV-LVA score for a move.
+     * Higher values indicate better move ordering priority.
+     * Formula: (victim_value * 10) - attacker_value
+     */
+    private static int calculateMVVLVAScore(String move, Board board) {
+        // Extract from and to squares
+        int fromSq = (move.charAt(0) - 'a') + (move.charAt(1) - '1') * 8;
+        int toSq = (move.charAt(2) - 'a') + (move.charAt(3) - '1') * 8;
+        
+        // Get victim (piece on destination square)
+        int victimValue = Evaluator.getPieceValue(toSq, board);
+        
+        // Get attacker (piece on source square)
+        int attackerValue = Evaluator.getPieceValue(fromSq, board);
+        
+        // MVV-LVA formula: prioritize capturing valuable pieces with cheap pieces
+        return (victimValue * 10) - attackerValue;
     }
 
     /**
