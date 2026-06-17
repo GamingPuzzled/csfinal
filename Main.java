@@ -51,6 +51,13 @@ public class Main {
             } 
             else {
                 // Assume the user typed a move string (e.g., "e2e4")
+                // First verify the move appears in the pseudo-legal move list.
+                if (!board.isPseudoLegal(input)) {
+                    System.out.println("❌ Invalid or Illegal move! Try again (e.g., e2e4).");
+                    ConsoleUtils.printAvailableMoves(board);
+                    continue;
+                }
+
                 boolean success = board.makeMove(input);
                 if (success) {
                     ConsoleUtils.clearScreen();

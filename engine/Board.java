@@ -48,7 +48,35 @@ public class Board {
      * Updates both the underlying bitboards and updates the Zobrist hash incrementally.
      */
     public boolean makeMove(String uciMove) {
-        if (uciMove == null || uciMove.length() < 4) return false;
+        if (uciMove == null) return false;
+
+        String raw = uciMove.trim();
+        // Try to locate a UCI-style substring like "e2e4" inside the input.
+        // This handles inputs such as "Bf1d3" or long algebraic forms by extracting
+        // the final 4- or 5-character UCI move if present.
+        String found = null;
+        for (int i = 0; i + 4 <= raw.length(); i++) {
+            String sub4 = raw.substring(i, i + 4).toLowerCase();
+            boolean ok4 = sub4.charAt(0) >= 'a' && sub4.charAt(0) <= 'h'
+                && sub4.charAt(1) >= '1' && sub4.charAt(1) <= '8'
+                && sub4.charAt(2) >= 'a' && sub4.charAt(2) <= 'h'
+                && sub4.charAt(3) >= '1' && sub4.charAt(3) <= '8';
+            if (ok4) {
+                // Check for 5-char promotion (e.g., e7e8q)
+                if (i + 5 <= raw.length()) {
+                    char p = Character.toLowerCase(raw.charAt(i + 4));
+                    if (p == 'q' || p == 'r' || p == 'b' || p == 'n') {
+                        found = raw.substring(i, i + 5).toLowerCase();
+                        break;
+                    }
+                }
+                found = sub4;
+                break;
+            }
+        }
+        if (found == null) return false;
+
+        uciMove = found;
 
         int fromSq = (uciMove.charAt(0) - 'a') + (uciMove.charAt(1) - '1') * 8;
         int toSq = (uciMove.charAt(2) - 'a') + (uciMove.charAt(3) - '1') * 8;
@@ -180,6 +208,36 @@ public class Board {
         // --- KING SAFETY / LEGALITY CHECK ---
         // Identify the square of the king belonging to the color that JUST moved
         long kingBitboard = whiteToMove ? pieceBitboards[WK] : pieceBitboards[BK];
+        if (kingBitboard == 0L) {
+            // Sanity: king missing after the move — treat as illegal and rollback
+            pieceBitboards[movingPiece] |= fromMask;
+            if (isPromotion) {
+                pieceBitboards[promoPiece] &= ~toMask;
+            } else {
+                pieceBitboards[movingPiece] &= ~toMask;
+            }
+
+            if (targetPiece != -1) {
+                pieceBitboards[targetPiece] |= toMask;
+            }
+
+            if (epVictimSq != -1) {
+                pieceBitboards[epVictimPiece] |= (1L << epVictimSq);
+            }
+
+            if (executedCastling) {
+                int rookPiece = whiteToMove ? WR : BR;
+                pieceBitboards[rookPiece] |= (1L << castlingRookFrom);
+                pieceBitboards[rookPiece] &= ~(1L << castlingRookTo);
+            }
+
+            this.currentHash = oldHash;
+            this.castlingRights = oldRights;
+            this.enPassantSquare = oldEpSquare;
+            updateOccupancy();
+            return false;
+        }
+
         int kingSquare = Long.numberOfTrailingZeros(kingBitboard);
 
         // Pass the opposite side to check if they can strike our king square
@@ -294,6 +352,37 @@ public class Board {
         System.out.println("    a   b   c   d   e   f   g   h\n");
         System.out.println("Turn: " + (whiteToMove ? "White" : "Black"));
         System.out.println("Zobrist Signature (Hex): 0x" + Long.toHexString(currentHash).toUpperCase());
+    }
+
+    /**
+     * Checks whether the provided input contains a UCI-style move
+     * that appears in the current pseudo-legal move list.
+     */
+    public boolean isPseudoLegal(String input) {
+        if (input == null) return false;
+        String raw = input.trim();
+        String found = null;
+        for (int i = 0; i + 4 <= raw.length(); i++) {
+            String sub4 = raw.substring(i, i + 4).toLowerCase();
+            boolean ok4 = sub4.charAt(0) >= 'a' && sub4.charAt(0) <= 'h'
+                && sub4.charAt(1) >= '1' && sub4.charAt(1) <= '8'
+                && sub4.charAt(2) >= 'a' && sub4.charAt(2) <= 'h'
+                && sub4.charAt(3) >= '1' && sub4.charAt(3) <= '8';
+            if (ok4) {
+                if (i + 5 <= raw.length()) {
+                    char p = Character.toLowerCase(raw.charAt(i + 4));
+                    if (p == 'q' || p == 'r' || p == 'b' || p == 'n') {
+                        found = raw.substring(i, i + 5).toLowerCase();
+                        break;
+                    }
+                }
+                found = sub4;
+                break;
+            }
+        }
+        if (found == null) return false;
+        java.util.List<String> moves = engine.MoveGenerator.generatePseudoLegalMoves(this);
+        return moves.contains(found);
     }
 
     private char getCharFromPieceType(int type) {
